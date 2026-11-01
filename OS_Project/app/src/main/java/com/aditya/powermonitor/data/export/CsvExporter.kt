@@ -53,7 +53,7 @@ class CsvExporter(
         val file = File(dir, fileName)
         file.bufferedWriter().use { out ->
             out.appendLine(header.joinToString(","))
-            lines.forEach { out.appendLine(it.joinToString(",", transform = ::escape)) }
+            lines.forEach { out.appendLine(Csv.line(it)) }
         }
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
         return CsvExport(uri, fileName, lines.size)
@@ -86,19 +86,6 @@ class CsvExporter(
 
     private fun time(epochMs: Long): String =
         dateTime.format(Instant.ofEpochMilli(epochMs).atZone(zone))
-
-    /**
-     * CSV rule: a field containing a comma, quote or line break is wrapped in quotes, and
-     * quotes inside it are doubled. App names like "Maps, Navigation" need this.
-     */
-    private fun escape(value: Any?): String {
-        val s = value?.toString() ?: ""
-        return if (s.any { it == ',' || it == '"' || it == '\n' || it == '\r' }) {
-            "\"" + s.replace("\"", "\"\"") + "\""
-        } else {
-            s
-        }
-    }
 
     private companion object {
         val USAGE_HEADER = listOf(

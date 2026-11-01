@@ -9,6 +9,7 @@ import com.aditya.powermonitor.PowerMonitorApp
 import com.aditya.powermonitor.data.collector.BatteryReading
 import com.aditya.powermonitor.data.db.entity.AppUsageTotal
 import com.aditya.powermonitor.data.db.entity.BatterySnapshot
+import com.aditya.powermonitor.data.repository.DrainEstimator
 import com.aditya.powermonitor.data.repository.MonitorRepository
 import com.aditya.powermonitor.util.TimeFormat
 import kotlinx.coroutines.Dispatchers
@@ -70,11 +71,10 @@ class DashboardViewModel(private val repository: MonitorRepository) : ViewModel(
         }
     }
 
-    /** Same rule as the repository: only count drops between two unplugged snapshots. */
+    /** Same rule as logging: only count drops between two unplugged snapshots. */
     private fun batteryUsed(snapshots: List<BatterySnapshot>): Int =
         snapshots.zipWithNext().sumOf { (a, b) ->
-            if (a.isCharging || b.isCharging) 0
-            else (a.levelPercent - b.levelPercent).coerceAtLeast(0)
+            DrainEstimator.batteryDrop(a.levelPercent, a.isCharging, b.levelPercent, b.isCharging)
         }
 
     companion object {

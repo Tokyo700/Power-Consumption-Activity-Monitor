@@ -56,4 +56,7 @@ dependencies {
     ksp(libs.androidx.room.compiler)
 
     implementation(libs.androidx.work.runtime.ktx)
+
+    // Plain JVM unit tests in src/test, run on your computer with ./gradlew test.
+    testImplementation(libs.junit)
 }

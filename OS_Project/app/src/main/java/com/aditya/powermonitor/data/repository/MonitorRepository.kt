@@ -71,16 +71,16 @@ class MonitorRepository(
     suspend fun logSnapshot(): LogResult = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
         val previous = batteryDao.latest()
-        // Start where the last run ended so intervals never overlap. If there is no previous
-        // run, or it's very old (app was force-stopped, phone was off), cover a default window.
-        val start = previous?.timestamp
-            ?.takeIf { now - it in 1..MAX_INTERVAL_MS }
-            ?: (now - DEFAULT_INTERVAL_MS)
+        val start = DrainEstimator.intervalStart(previous?.timestamp, now)
 
         val reading = battery.read()
         val apps = usage.collect(start, now)
-        val drop = batteryDrop(previous, reading)
-        val shares = estimateShares(apps, drop)
+        val drop = previous?.let {
+            DrainEstimator.batteryDrop(
+                it.levelPercent, it.isCharging, reading.levelPercent, reading.isCharging,
+            )
+        } ?: 0
+        val shares = DrainEstimator.shares(apps, drop)
 
         // A transaction makes both inserts succeed or fail together.
         db.withTransaction {
@@ -98,25 +98,6 @@ class MonitorRepository(
         db.withTransaction {
             batteryDao.deleteOlderThan(cutoff) + usageDao.deleteOlderThan(cutoff)
         }
-    }
-
-    /** Percentage points lost since the previous snapshot; 0 if charging or no baseline. */
-    private fun batteryDrop(previous: BatterySnapshot?, now: BatteryReading): Int {
-        if (previous == null || previous.isCharging || now.isCharging) return 0
-        return (previous.levelPercent - now.levelPercent).coerceAtLeast(0)
-    }
-
-    /**
-     * Android doesn't expose per-app battery use, so we estimate it: split the interval's
-     * drop between apps in proportion to how long they were active. Foreground time counts
-     * fully (screen on, CPU busy); foreground-service time counts less because the screen
-     * is usually off. The remainder of real drain (screen, radio, idle) is spread with it.
-     */
-    private fun estimateShares(apps: List<AppUsage>, dropPercent: Int): List<Float> {
-        val weights = apps.map { it.foregroundMs + it.foregroundServiceMs * SERVICE_WEIGHT }
-        val total = weights.sum()
-        if (dropPercent == 0 || total <= 0.0) return List(apps.size) { 0f }
-        return weights.map { (dropPercent * it / total).toFloat() }
     }
 
     private fun BatteryReading.toEntity() = BatterySnapshot(
@@ -142,10 +123,4 @@ class MonitorRepository(
         lastUsed = lastUsed,
         estimatedDrainPercent = share,
     )
-
-    private companion object {
-        const val DEFAULT_INTERVAL_MS = 15 * 60_000L
-        const val MAX_INTERVAL_MS = 6 * 60 * 60_000L
-        const val SERVICE_WEIGHT = 0.3
-    }
 }
