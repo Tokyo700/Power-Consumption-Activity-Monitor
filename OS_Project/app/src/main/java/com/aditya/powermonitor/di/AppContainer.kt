@@ -5,6 +5,7 @@ import com.aditya.powermonitor.data.collector.BatteryCollector
 import com.aditya.powermonitor.data.collector.SelfCpuSampler
 import com.aditya.powermonitor.data.collector.UsageCollector
 import com.aditya.powermonitor.data.db.AppDatabase
+import com.aditya.powermonitor.data.export.CsvExporter
 import com.aditya.powermonitor.data.repository.MonitorRepository
 
 /**
@@ -23,4 +24,5 @@ class AppContainer(context: Context) {
     val repository: MonitorRepository by lazy {
         MonitorRepository(database, batteryCollector, usageCollector)
     }
+    val csvExporter: CsvExporter by lazy { CsvExporter(appContext, repository) }
 }

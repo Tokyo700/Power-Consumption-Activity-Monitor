@@ -45,6 +45,17 @@ interface AppUsageDao {
     )
     fun observeRecordsForApp(packageName: String, from: Long, to: Long): Flow<List<AppUsageRecord>>
 
+    /** One-time read for CSV export; a null packageName means every app. */
+    @Query(
+        """
+        SELECT * FROM app_usage_records
+        WHERE (:packageName IS NULL OR packageName = :packageName)
+          AND intervalEnd > :from AND intervalStart < :to
+        ORDER BY intervalStart ASC, foregroundMs DESC
+        """
+    )
+    suspend fun getRecords(packageName: String?, from: Long, to: Long): List<AppUsageRecord>
+
     /** Returns how many rows were deleted. */
     @Query("DELETE FROM app_usage_records WHERE intervalEnd < :before")
     suspend fun deleteOlderThan(before: Long): Int

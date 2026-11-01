@@ -27,6 +27,13 @@ interface BatteryDao {
     )
     fun observeBetween(from: Long, to: Long): Flow<List<BatterySnapshot>>
 
+    /** One-time read (not a Flow) for CSV export. */
+    @Query(
+        "SELECT * FROM battery_snapshots WHERE timestamp >= :from AND timestamp < :to " +
+            "ORDER BY timestamp ASC"
+    )
+    suspend fun getBetween(from: Long, to: Long): List<BatterySnapshot>
+
     /** Returns how many rows were deleted. */
     @Query("DELETE FROM battery_snapshots WHERE timestamp < :before")
     suspend fun deleteOlderThan(before: Long): Int

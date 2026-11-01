@@ -11,6 +11,8 @@ import com.aditya.powermonitor.PowerMonitorApp
 import com.aditya.powermonitor.data.db.entity.AppUsageRecord
 import com.aditya.powermonitor.data.db.entity.AppUsageTotal
 import com.aditya.powermonitor.data.db.entity.BatterySnapshot
+import com.aditya.powermonitor.data.export.CsvExport
+import com.aditya.powermonitor.data.export.CsvExporter
 import com.aditya.powermonitor.data.repository.MonitorRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,6 +23,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
@@ -76,6 +79,7 @@ data class HistoryUiState(
 @OptIn(ExperimentalCoroutinesApi::class)
 class HistoryViewModel(
     private val repository: MonitorRepository,
+    private val exporter: CsvExporter,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -112,13 +116,37 @@ class HistoryViewModel(
 
     fun selectMode(mode: HistoryMode) = filter.update { it.copy(mode = mode) }
 
+    /** Writes what the current filters show (app rows or battery log) to a CSV file. */
+    suspend fun exportCsv(): CsvExport {
+        val f = filter.value
+        val (from, to) = f.range()
+        val label = fileLabel(from, to) + (f.packageName?.let { "_$it" } ?: "")
+        return when (f.mode) {
+            HistoryMode.APPS -> exporter.exportUsage(f.packageName, from, to, label)
+            HistoryMode.BATTERY -> exporter.exportBattery(from, to, label)
+        }
+    }
+
+    /** "2026-11-01_to_2026-11-07", or "all_time". */
+    private fun fileLabel(from: Long, to: Long): String {
+        if (to == Long.MAX_VALUE) return "all_time"
+        val zone = ZoneId.systemDefault()
+        val first = Instant.ofEpochMilli(from).atZone(zone).toLocalDate()
+        val last = Instant.ofEpochMilli(to - 1).atZone(zone).toLocalDate()
+        return if (first == last) "$first" else "${first}_to_$last"
+    }
+
     companion object {
         const val ARG_PACKAGE = "pkg"
 
         val Factory = viewModelFactory {
             initializer {
                 val app = this[APPLICATION_KEY] as PowerMonitorApp
-                HistoryViewModel(app.container.repository, createSavedStateHandle())
+                HistoryViewModel(
+                    app.container.repository,
+                    app.container.csvExporter,
+                    createSavedStateHandle(),
+                )
             }
         }
     }

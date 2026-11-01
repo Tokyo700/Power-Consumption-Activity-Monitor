@@ -55,6 +55,12 @@ class MonitorRepository(
         to: Long,
     ): Flow<List<AppUsageRecord>> = usageDao.observeRecordsForApp(packageName, from, to)
 
+    suspend fun getSnapshotsBetween(from: Long, to: Long): List<BatterySnapshot> =
+        batteryDao.getBetween(from, to)
+
+    suspend fun getRecords(packageName: String?, from: Long, to: Long): List<AppUsageRecord> =
+        usageDao.getRecords(packageName, from, to)
+
     /** Reads the battery right now without saving anything (for the dashboard header). */
     fun readBatteryNow(): BatteryReading = battery.read()
 

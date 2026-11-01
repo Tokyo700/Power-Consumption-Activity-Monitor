@@ -1,5 +1,9 @@
 package com.aditya.powermonitor.ui.history
 
+import android.content.ClipData
+import android.content.Context
+import android.content.Intent
+import android.widget.Toast
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,10 +35,12 @@ import androidx.compose.material3.rememberDateRangePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -43,10 +49,12 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aditya.powermonitor.data.db.entity.AppUsageRecord
 import com.aditya.powermonitor.data.db.entity.AppUsageTotal
 import com.aditya.powermonitor.data.db.entity.BatterySnapshot
+import com.aditya.powermonitor.data.export.CsvExport
 import com.aditya.powermonitor.util.TimeFormat
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
+import kotlinx.coroutines.launch
 
 @Composable
 fun HistoryScreen(
@@ -56,7 +64,30 @@ fun HistoryScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     // rememberSaveable survives rotation; the dialog's open/closed flag is pure UI state.
     var showDatePicker by rememberSaveable { mutableStateOf(false) }
+    var isExporting by remember { mutableStateOf(false) }
     val filter = state.filter
+    val context = LocalContext.current
+    // A coroutine scope tied to this screen, for work started by a button tap.
+    val scope = rememberCoroutineScope()
+
+    val onExport: () -> Unit = {
+        isExporting = true
+        scope.launch {
+            try {
+                val export = viewModel.exportCsv()
+                if (export.rowCount == 0) {
+                    Toast.makeText(context, "Nothing to export in this range", Toast.LENGTH_SHORT)
+                        .show()
+                } else {
+                    shareCsv(context, export)
+                }
+            } catch (e: Exception) {
+                Toast.makeText(context, "Export failed: ${e.message}", Toast.LENGTH_LONG).show()
+            } finally {
+                isExporting = false
+            }
+        }
+    }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -88,14 +119,19 @@ fun HistoryScreen(
             )
         }
         item {
-            AppFilter(
-                selected = filter.packageName,
-                selectedLabel = state.records.firstOrNull()?.appLabel
-                    ?: state.totals.firstOrNull { it.packageName == filter.packageName }?.appLabel,
-                choices = state.totals,
-                onSelect = viewModel::selectApp,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                AppFilter(
+                    selected = filter.packageName,
+                    selectedLabel = state.records.firstOrNull()?.appLabel
+                        ?: state.totals.firstOrNull { it.packageName == filter.packageName }?.appLabel,
+                    choices = state.totals,
+                    onSelect = viewModel::selectApp,
+                    modifier = Modifier.weight(1f),
+                )
+                OutlinedButton(onClick = onExport, enabled = !isExporting) {
+                    Text(if (isExporting) "Exporting…" else "Share CSV")
+                }
+            }
         }
         item { ModeToggle(filter.mode, viewModel::selectMode) }
 
@@ -120,6 +156,22 @@ fun HistoryScreen(
             },
         )
     }
+}
+
+/**
+ * Opens Android's share sheet for the file. FLAG_GRANT_READ_URI_PERMISSION gives the app the
+ * user picks temporary read access to this one file; ClipData carries that grant reliably
+ * on newer Android versions.
+ */
+private fun shareCsv(context: Context, export: CsvExport) {
+    val send = Intent(Intent.ACTION_SEND).apply {
+        type = "text/csv"
+        putExtra(Intent.EXTRA_STREAM, export.uri)
+        putExtra(Intent.EXTRA_SUBJECT, export.fileName)
+        clipData = ClipData.newRawUri(export.fileName, export.uri)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    context.startActivity(Intent.createChooser(send, "Share ${export.fileName}"))
 }
 
 /** A button that opens a menu of every app seen in the current range. */
