@@ -45,6 +45,10 @@ interface AppUsageDao {
     )
     fun observeRecordsForApp(packageName: String, from: Long, to: Long): Flow<List<AppUsageRecord>>
 
+    /** Returns how many rows were deleted. */
+    @Query("DELETE FROM app_usage_records WHERE intervalEnd < :before")
+    suspend fun deleteOlderThan(before: Long): Int
+
     @Query("SELECT COUNT(*) FROM app_usage_records")
     fun observeCount(): Flow<Int>
 }

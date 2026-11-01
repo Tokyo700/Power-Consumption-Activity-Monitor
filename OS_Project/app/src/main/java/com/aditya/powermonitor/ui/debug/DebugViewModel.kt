@@ -97,6 +97,11 @@ class DebugViewModel(
         refresh()
     }
 
+    fun runCleanupNow() {
+        WorkScheduler.runCleanupOnce(app)
+        _state.update { it.copy(logMessage = "Cleanup queued; rows older than 30 days will go.") }
+    }
+
     /** Same work as Log now, but through WorkManager, to prove the background path works. */
     fun runWorkerNow() {
         WorkScheduler.runOnce(app)

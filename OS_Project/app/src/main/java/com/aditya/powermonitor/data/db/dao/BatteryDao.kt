@@ -27,6 +27,10 @@ interface BatteryDao {
     )
     fun observeBetween(from: Long, to: Long): Flow<List<BatterySnapshot>>
 
+    /** Returns how many rows were deleted. */
+    @Query("DELETE FROM battery_snapshots WHERE timestamp < :before")
+    suspend fun deleteOlderThan(before: Long): Int
+
     @Query("SELECT COUNT(*) FROM battery_snapshots")
     fun observeCount(): Flow<Int>
 }

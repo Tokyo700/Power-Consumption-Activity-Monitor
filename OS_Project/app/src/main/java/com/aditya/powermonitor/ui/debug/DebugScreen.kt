@@ -71,6 +71,7 @@ fun DebugScreen(
                 logMessage = state.logMessage,
                 onLogNow = viewModel::logNow,
                 onRunWorker = viewModel::runWorkerNow,
+                onRunCleanup = viewModel::runCleanupNow,
             )
         }
         item { WorkerCard(periodicWork) }
@@ -104,6 +105,7 @@ private fun SavedCard(
     logMessage: String?,
     onLogNow: () -> Unit,
     onRunWorker: () -> Unit,
+    onRunCleanup: () -> Unit,
 ) {
     InfoCard("Saved in database") {
         Field("Battery snapshots", saved.snapshotCount.toString())
@@ -120,6 +122,7 @@ private fun SavedCard(
                 )
             }
         }
+        OutlinedButton(onClick = onRunCleanup) { Text("Run cleanup (delete > 30 days)") }
         logMessage?.let {
             Text(it, style = MaterialTheme.typography.bodySmall)
         }

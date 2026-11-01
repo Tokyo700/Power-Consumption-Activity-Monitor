@@ -86,6 +86,14 @@ class MonitorRepository(
         LogResult(start, now, drop, apps.size)
     }
 
+    /** Deletes everything older than [keepDays] days. Returns how many rows were removed. */
+    suspend fun deleteOlderThan(keepDays: Int): Int = withContext(Dispatchers.IO) {
+        val cutoff = System.currentTimeMillis() - keepDays * 24 * 60 * 60_000L
+        db.withTransaction {
+            batteryDao.deleteOlderThan(cutoff) + usageDao.deleteOlderThan(cutoff)
+        }
+    }
+
     /** Percentage points lost since the previous snapshot; 0 if charging or no baseline. */
     private fun batteryDrop(previous: BatterySnapshot?, now: BatteryReading): Int {
         if (previous == null || previous.isCharging || now.isCharging) return 0
